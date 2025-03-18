@@ -352,19 +352,26 @@ level: 2
 # Data fetching with signals?
 
 ```ts
-function getArticles(): Signal<ReadonlyArray<Article> | undefined> {
-  const result = signal(undefined);
-
-  fetch("/articles")
-    .then((res) => result.set(res.json()))
-
-  return result;
+@Component({
+  selector: 'app-root',
+  standalone: true,
+  template: `
+    <ul>
+      @for (post of posts(); track post.id) {
+        <li>{{ post.title }}</li>
+      }
+    </ul>
+  `,
+})
+export class App {
+  http = inject(HttpClient);
+  posts = toSignal(
+    this.http.get<ReadonlyArray<{ id: number; title: string }>>(
+      'https://jsonplaceholder.typicode.com/todos',
+    ),
+    { initialValue: [] },
+  ); // ⚠️ Observable is subscribed by `toSignal`, request is already sent
 }
-
-const articles = getArticles();
-// Request is already sent
-
-console.log(articles()); // First `undefined`, later the articles from the response
 ```
 
 ---
