@@ -1,5 +1,5 @@
 {
-  "name": "simple-observable",
+  "name": "data-fetching",
   "version": "0.0.0",
   "scripts": {
     "ng": "ng",

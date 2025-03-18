@@ -39,7 +39,7 @@ level: 1
 
 # Agenda
 
-- Signals & observables recap
+- Signals vs. observables recap
 - On data fetching and lazyness
 - Impact on architecture
 - Angular v19 resource API
@@ -50,7 +50,7 @@ level: 1
 layout: section
 ---
 
-# Signals & observables recap
+# Signals vs. observables recap
 
 ---
 transition: slide-up
@@ -236,6 +236,14 @@ fullName = computed(
 );
 ```
 
+```html
+{{ fullName() }}
+```
+
+```ts
+console.log(this.fullName());
+```
+
 </div>
 <div>
 
@@ -257,6 +265,10 @@ fullName$ = combineLatest([
         `${firstName} ${lastName}`
     )
   );
+```
+
+```html
+{{ fullName$ | async }}
 ```
 
 ```ts
@@ -321,67 +333,92 @@ transition: slide-up
 level: 2
 ---
 
-# Data fetching with observables
+# Data fetching with observables <small>[Source](https://github.com/hupf/techkafi-nonlazy-angular-signals/tree/main/examples/data-fetching/src/components/observable.component.ts)</small>
 
 ```ts
-@Component({
-  selector: 'app-root',
-  standalone: true,
-  imports: [AsyncPipe],
-  template: `
-    <ul>
-      @for (post of posts$ | async; track post.id) {
-        <li>{{ post.title }}</li>
-      }
-    </ul>
-  `,
-})
-export class App {
-  http = inject(HttpClient)
+export class ObservableComponent {
+  http = inject(HttpClient);
+  show = signal(false);
   posts$ = this.http.get<ReadonlyArray<{ id: number; title: string }>>(
-    "https://jsonplaceholder.typicode.com/todos"
-  ); // ⚠️ Cold-observable (lazy), no request is sent yet
+    'https://jsonplaceholder.typicode.com/todos',
+  );
+
+  toggle() {
+    this.show.update((v) => !v);
+  }
 }
 ```
+
+```html
+<button (click)="toggle()">Toggle</button>
+@if (show()) {
+  <ul>
+    @for (post of posts$ | async; track post.id) {
+      <li>{{ post.title }}</li>
+    }
+  </ul>
+}
+```
+
 
 ---
 transition: slide-up
 level: 2
 ---
 
-# Data fetching with signals?
+# Data fetching with signals? <small>[Source](https://github.com/hupf/techkafi-nonlazy-angular-signals/tree/main/examples/data-fetching/src/components/to-signal.component.ts)</small>
 
 ```ts
-@Component({
-  selector: 'app-root',
-  standalone: true,
-  template: `
-    <ul>
-      @for (post of posts(); track post.id) {
-        <li>{{ post.title }}</li>
-      }
-    </ul>
-  `,
-})
-export class App {
+export class ToSignalComponent {
   http = inject(HttpClient);
+  show = signal(false);
   posts = toSignal(
     this.http.get<ReadonlyArray<{ id: number; title: string }>>(
       'https://jsonplaceholder.typicode.com/todos',
     ),
     { initialValue: [] },
-  ); // ⚠️ Observable is subscribed by `toSignal`, request is already sent
+  ); // ⚠️ Subscribes right-away, request is already sent
+
+  toggle() {
+    this.show.update((v) => !v);
+  }
 }
 ```
+
+```html
+<button (click)="toggle()">Toggle</button>
+@if (show()) {
+  <ul>
+    @for (post of posts(); track post.id) {
+      <li>{{ post.title }}</li>
+    }
+  </ul>
+}
+```
+
+<!--
+Interop: https://angular.dev/ecosystem/rxjs-interop
+-->
+
+---
+transition: slide-up
+level: 2
+layout: bullets
+---
+
+- `toSignal` immediately subscribes to observable, making it "hot"
+- `toSignal` creates a subscription that is alive as long as the component/service is alive.
 
 ---
 transition: slide-up
 level: 2
 ---
 
-# Interop
+# toLazySignal
 
-https://angular.dev/ecosystem/rxjs-interop
+> This function works almost like the original toSignal() from Angular core (and uses it), but the subscription will be created not instantly - only when the resulting signal is read for the first time.
+
+https://ngxtension.netlify.app/utilities/signals/to-lazy-signal/
 
 
 ---
@@ -390,6 +427,246 @@ level: 2
 ---
 
 ...
+
+---
+transition: slide-up
+level: 1
+layout: section
+---
+
+# Angular v19 resource API<sup>*</sup>
+
+<sup>*</sup>Experimental (see also [Angular Resource RFC 2: APIs](https://github.com/angular/angular/discussions/60121))
+
+---
+transition: slide-up
+level: 2
+layout: quote
+---
+
+# A resource is a declarative dependency on an asynchronous data source, expressed through signals. Resources bridge the synchronous world of signals with operations that take time (...). You can think of them as a form of asynchronous computed.
+
+<small>Source: [Angular Resource RFC 1: Architecture](https://github.com/angular/angular/discussions/60120)</small>
+
+---
+transition: slide-up
+level: 2
+layout: quote
+---
+
+# The Angular team sees resources and Observable as serving fundamentally different purposes and use cases. Observables work best when used to model _events over time_, while resource is concerned with asynchronously derived state.
+
+<small>Source: [Angular Resource RFC 1: Architecture](https://github.com/angular/angular/discussions/60120)</small>
+
+---
+transition: slide-up
+level: 2
+---
+
+# The `resource` constructor
+
+```ts
+function resource<T, R>({
+  request?: (() => R) | undefined;
+  loader: (param: ResourceLoaderParams<R>) => PromiseLike<T>;
+  defaultValue?: T | undefined;
+  equal?: ValueEqualityFn<T> | undefined;
+  injector?: Injector | undefined;
+}): ResourceRef<T | undefined>;
+```
+
+https://angular.dev/api/core/resource
+
+---
+transition: slide-up
+level: 2
+---
+
+# ResourceRef
+
+```ts
+interface ResourceRef<T> {
+  readonly value: Signal<T>;
+  readonly status: Signal<ResourceStatus>;
+  readonly error: Signal<Error | undefined>;
+  readonly isLoading: Signal<boolean>;
+  hasValue(): boolean;
+}
+
+enum ResourceStatus {
+  Idle,
+  Error,
+  Loading,
+  Reloading,
+  Resolved,
+  Local,
+}
+```
+
+https://angular.dev/api/core/ResourceRef
+
+---
+transition: slide-up
+level: 2
+---
+
+# Example: resource
+
+```ts
+id = signal(1);
+todo = resource({
+  request: () => ({ id: this.id() }),
+  loader: async ({ request: { id }, abortSignal }) => {
+    const res = await fetch(
+      `https://jsonplaceholder.typicode.com/todos/${id}`,
+      {
+        signal: abortSignal,
+      },
+    );
+    return res.json();
+  },
+});
+```
+
+---
+transition: slide-up
+level: 2
+---
+
+# Example: resource (rendering)
+
+```html
+@if (todo.isLoading()) {
+  <p>Loading...</p>
+} @else if (todo.error()) {
+  <p>Error: {{ $any(todo.error())?.status }}</p>
+} @else {
+  <h1>{{ todo.value()?.title }}</h1>
+}
+```
+
+---
+transition: slide-up
+level: 2
+---
+
+# Example: rxResource
+
+```ts
+http = inject(HttpClient);
+id = signal(1);
+todo = rxResource({
+  request: () => ({ id: this.id() }),
+  loader: ({ request: { id } }) =>
+    this.http.get<{
+      id: number;
+      title: string;
+      completed: boolean;
+      userId: number;
+    }>(`https://jsonplaceholder.typicode.com/todos/${id}`),
+});
+```
+
+https://angular.dev/api/core/rxjs-interop/rxResource
+
+---
+transition: slide-up
+level: 2
+---
+
+# Example: httpResource
+
+```ts
+id = signal(1);
+todo = httpResource<{
+  id: number;
+  title: string;
+  completed: boolean;
+  userId: number;
+}>(() => `https://jsonplaceholder.typicode.com/todos/${this.id()}`);
+```
+
+https://angular.dev/api/common/http/httpResource
+
+---
+transition: slide-up
+level: 2
+---
+
+# But, resources are not lazy!
+
+<style>
+  div {
+    max-height: 30vh;
+  }
+</style>
+
+So let's create a `lazyResource` that loads when `value` is first read:
+
+<div class="font-size-1 overflow-y-auto">
+
+```ts
+/**
+ * Creates a lazy `Resource`, that defers the loading of the data
+ * until the Resource's value is read. Otherwise, it has the same API
+ * and behavior as `resource` construction function.
+ */
+function lazyResource<T, R>(
+  options: ResourceOptions<T, R>
+): ResourceRef<T | undefined> {
+  const { request, loader, equal, ...rest } = options;
+
+  // Whether the resource's `value` signal has already been read
+  const read = signal(false);
+
+  // Wrap the request function to include the `read` value and cause a
+  // loader call whenever it changes.
+  const wrappedRequest = computed(() => ({
+    read: read(),
+    param: request && request(),
+  })) as () => { read: boolean; param: R };
+
+  // Wrap the loader function to only call it lazy, after the first
+  // time the `value` signal has been read.
+  const wrappedLoader: ResourceLoader<
+    T | undefined,
+    { read: boolean; param: R }
+  > = async ({ request, ...rest }) => {
+    const { read, param } = request;
+    if (!read) return undefined;
+    return await loader({
+      request: param as Exclude<NoInfer<R>, undefined>,
+      ...rest,
+    });
+  };
+
+  const resourceRef = resource<T | undefined, { read: boolean; param: R }>({
+    request: wrappedRequest,
+    loader: wrappedLoader,
+    ...rest,
+  } as ResourceOptions<T | undefined, { read: boolean; param: R }>);
+
+  const wrappedValue: WritableSignal<T | undefined> = Object.assign(() => {
+    if (!read()) {
+      // Trigger the (lazy-)loading of the data by marking the value
+      // as "read". Since we're not allowed to update signals when the
+      // value is read in a `computed` or `effect` execution context,
+      // we write the signal in a new task as a workaround
+      setTimeout(() => read.set(true));
+    }
+    return resourceRef.value();
+  }, resourceRef.value);
+
+  return {
+    ...resourceRef,
+    value: wrappedValue,
+  };
+}
+```
+
+</div>
+
+https://stackblitz.com/edit/stackblitz-starters-enhbj8gu?file=src%2Fmain.ts
 
 ---
 transition: slide-up
@@ -398,21 +675,6 @@ layout: section
 ---
 
 # Impact on architecture
-
----
-transition: slide-up
-level: 2
----
-
-...
-
----
-transition: slide-up
-level: 1
-layout: section
----
-
-# Angular v19 resource API
 
 ---
 transition: slide-up
