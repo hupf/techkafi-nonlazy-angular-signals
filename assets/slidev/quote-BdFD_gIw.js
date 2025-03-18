@@ -1,0 +1,1 @@
+import{f as o,o as s,g as t,j as a}from"../modules/vue-DZveH3c9.js";import{u as r}from"./context-BG5cRBl1.js";const l={class:"slidev-layout h-full grid quote"},c={class:"my-auto"},i={__name:"quote",setup(_){return r(),(e,n)=>(s(),o("div",l,[t("div",c,[a(e.$slots,"default")])]))}};export{i as _};
