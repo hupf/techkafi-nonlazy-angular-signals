@@ -57,93 +57,218 @@ transition: slide-up
 level: 2
 ---
 
+<div class="grid gap-4 grid-cols-2">
+
 # What are signals?
+# What are observables?
+
+</div>
+
+<div class="grid gap-4 grid-cols-2">
+<div>
 
 - Reactive primitive that represents a value
+
+</div>
+<div>
+
+- Reactive primitive that represents values over time (events)
+
+</div>
+</div>
+
+<div class="grid gap-4 grid-cols-2">
+<div>
+
 - Always has a value
+
+</div>
+<div>
+
+- Can have no value emitted yet, can emit multiple values, can cache values, can emit a single value & terminate etc.
+
+</div>
+</div>
+
+<div class="grid gap-4 grid-cols-2">
+<div>
+
 - Read current value (anytime, synchronously)
-- Write/update value
+
+</div>
+<div>
+
+- Subscribe to get value (asynchronously)
+
+</div>
+</div>
+
+<div class="grid gap-4 grid-cols-2">
+<div>
+
 - No visible subscriptions → implicitly managed
+
+</div>
+<div>
+
+- Explicit `name$.subscribe(...)` or implicit `name$ | async` subscribe/unsubscribe
+
+</div>
+</div>
+
+<div class="grid gap-4 grid-cols-2">
+<div>
+
+- Write/update current value
+
+</div>
+<div>
+
+- Emit new value
+
+</div>
+</div>
 
 ---
 transition: slide-up
 level: 2
 ---
 
-# Signal primitives
+<div class="grid gap-4 grid-cols-2">
+<div>
 
-Signal constructor:
+# Signal
 
 ```ts
-const name = signal("Jane");
-console.log(`Hi ${name()}!`); // Read
-name.set("John"); // Write
+name = signal("Jane");
 ```
+
+</div>
+<div>
+
+# Observable
+
+```ts
+name$ = new BehaviorSubject("Jane");
+```
+
+</div>
+</div>
+
+<div class="grid gap-4 grid-cols-2">
+<div>
+
+Read value:
+
+```html
+Hi {{ name() }}!
+```
+
+```ts
+const greeting = `Hi ${this.name()}!`;
+// ...
+```
+
+</div>
+<div>
+
+Read value(s):
+
+```html
+Hi {{ name$ | async }}!
+```
+
+```ts
+// ⚠️ BehaviorSubject-only!
+const greeting = `Hi ${this.name$.getValue()}!`;
+```
+
+```ts
+this.name$
+  .pipe(take(1))
+  .subscribe((name) => {
+    const greeting = `Hi ${name}!`;
+    // ...
+  });
+```
+
+</div>
+</div>
+
+<div class="grid gap-4 grid-cols-2">
+<div>
+
+Write/update value
+```ts
+this.name.set("John");
+this.name.update(value => `${value}!`);
+```
+
+</div>
+<div>
+
+Emit value:
+```ts
+this.name$.next("John");
+```
+
+</div>
+</div>
+
+---
+transition: slide-up
+level: 2
+---
+
+<div class="grid gap-4 grid-cols-2">
+<div>
+
+# Signal
 
 Computed (derived signal):
 
 ```ts
-const firstName = signal("Jane");
-const lastName = signal("Doe");
-const fullName = computed(() => `${firstName() lastName()});
+firstName = signal("Jane");
+lastName = signal("Doe");
+
+fullName = computed(
+  () => `${this.firstName()} ${this.lastName()}`
+);
 ```
 
-Effect:
-
-```ts
-const lang = signal(localStorage.setItem("lang") ?? "de");
-effect(() => {
-  localStorage.setItem("lang", lang());
-});
-```
-
----
-transition: slide-up
-level: 2
----
-
-# What are observables?
-
-- Reactive primitive that represents events or values over time
-- Can have no value emitted yet, can emit multiple values, can cache values, can emit a single value & terminate etc.
-- Subscribe to observables (asynchronously get values)
-- Emit value (on subjects)
-- Subscribe/unsubscribe explicitly:
-```ts
-const unsubscribe = name$.subscribe(...);
-unsubscribe()
-```
-- Subscribe/unsubscribe implicitly in template:
-
-```
-name | async
-``` 
-
----
-transition: slide-up
-level: 2
----
+</div>
+<div>
 
 # Observable
 
-The closest thing to a signal:
+Derived observable:
+
 ```ts
-const name$ = new BehaviorSubject("Jane");
-name$.getValue(); // Get value sync (BehaviorSubject-only)
-name$.pipe(take(1)).subscribe((name) => console.log(name)); // Get value async
-name$.next("John"); // Emit value
+firstName$ = new BehaviorSubject("Jane");
+lastName$ = new BehaviorSubject("Doe");
+
+fullName$ = combineLatest([
+  this.firstName$,
+  this.lastName$
+])
+  .pipe(
+    map(
+      ([firstName, lastName]) =>
+        `${firstName} ${lastName}`
+    )
+  );
 ```
 
-Derived observable:
 ```ts
-const firstName$ = new BehaviorSubject("Jane");
-const lastName$ = new BehaviorSubject("Doe");
-const fullName$ = combineLatest([firstName$, lastName$]).pipe(
-  map(([firstName, lastName]) => `${firstName} ${lastName}`)
-);
-fullName$.getValue(); // Does not work on derived observables!
-fullName$.pipe(take(1)).subscribe((fullName) => console.log(fullName)); // Get value async
+this.fullName$.getValue(); // 🛑 Doesn't work...
+
+this.fullName$
+  .pipe(take(1)) // ⚠️ Beware of leaks!
+  .subscribe((fullName) => console.log(fullName));
 ```
+
+</div>
+</div>
 
 ---
 transition: slide-up
@@ -154,16 +279,24 @@ layout: quote
 # Signals are way simpler and have nicer ergonomics.
 
 ---
-transition: slide-left
+transition: slide-up
 level: 2
+layout: quote
 ---
 
-# Pull vs. push semantics
+# Signals are designed to handle synchronous state. Every signal has a well defined concept of its current value.
 
-- Function = pull-based
-- Promises = push-based
-- Observables = push-based
-- Signals = pull/push-based → although the "push" happens outside of the signal
+<small>Source: [Angular Resource RFC 1: Architecture](https://github.com/angular/angular/discussions/60120)</small>
+
+---
+transition: slide-left
+level: 2
+layout: quote
+---
+
+# Ultimately, the state shown to the user must be synchronous – the UI must show something at any given moment, even if the requested data is not yet available or if the request fails.
+
+<small>Source: [Angular Resource RFC 1: Architecture](https://github.com/angular/angular/discussions/60120)</small>
 
 ---
 transition: slide-up
