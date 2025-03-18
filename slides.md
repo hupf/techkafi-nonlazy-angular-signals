@@ -436,7 +436,7 @@ layout: section
 <sup>*</sup>Experimental
 
 [Angular Resource RFC 1: Architecture](https://github.com/angular/angular/discussions/60120) \
-[Angular Resource RFC 2: APIs](https://github.com/angular/angular/discussions/60121))
+[Angular Resource RFC 2: APIs](https://github.com/angular/angular/discussions/60121)
 
 ---
 transition: slide-up
@@ -736,8 +736,9 @@ level: 2
 
 - Resources are a great bridge between the async & sync worlds
 - Avoid "waterfalls", fetch data "higher up" \
-  → (container vs. presentational components)
-- No all data fetching should be moved outside of the component
+  → Container vs. presentational components \
+  → Pure core, imperative shell
+- Not all data fetching should be moved outside of the component
 - Resource-based data fetching will probably be integrated in the router and `@defer`
 
 ---
