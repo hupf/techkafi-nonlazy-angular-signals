@@ -41,8 +41,8 @@ level: 1
 
 - Signals vs. observables recap
 - On data fetching and lazyness
-- Impact on architecture
 - Angular v19 resource API
+- Impact on architecture
 
 ---
 transition: slide-up
@@ -333,30 +333,28 @@ transition: slide-up
 level: 2
 ---
 
-# Data fetching with observables <small>[Source](https://github.com/hupf/techkafi-nonlazy-angular-signals/tree/main/examples/data-fetching/src/components/observable.component.ts)</small>
+# Data fetching with observables
 
 ```ts
 export class ObservableComponent {
   http = inject(HttpClient);
-  show = signal(false);
-  posts$ = this.http.get<ReadonlyArray<{ id: number; title: string }>>(
-    'https://jsonplaceholder.typicode.com/todos',
+  id$ = new BehaviorSubject(1);
+  todo$ = this.id$.pipe(
+    switchMap((id) =>
+      this.http.get<{ id: number; title: string }>(
+        `https://jsonplaceholder.typicode.com/todos/${id}`,
+      ),
+    ),
   );
-
-  toggle() {
-    this.show.update((v) => !v);
-  }
 }
 ```
 
 ```html
-<button (click)="toggle()">Toggle</button>
-@if (show()) {
-  <ul>
-    @for (post of posts$ | async; track post.id) {
-      <li>{{ post.title }}</li>
-    }
-  </ul>
+@let todo = todo$ | async;
+@if (!todo) {
+  <p>Loading...</p>
+} @else {
+  <h1>{{ todo.title }}</h1>
 }
 ```
 
@@ -366,33 +364,31 @@ transition: slide-up
 level: 2
 ---
 
-# Data fetching with signals? <small>[Source](https://github.com/hupf/techkafi-nonlazy-angular-signals/tree/main/examples/data-fetching/src/components/to-signal.component.ts)</small>
+# Data fetching with signals?
 
 ```ts
 export class ToSignalComponent {
   http = inject(HttpClient);
-  show = signal(false);
-  posts = toSignal(
-    this.http.get<ReadonlyArray<{ id: number; title: string }>>(
-      'https://jsonplaceholder.typicode.com/todos',
+  id = signal(1);
+  todo = toSignal(
+    toObservable(this.id).pipe(
+      switchMap((id) =>
+        this.http.get<{ id: number; title: string }>(
+          `https://jsonplaceholder.typicode.com/todos/${id}`,
+        ),
+      ),
     ),
-    { initialValue: [] },
-  ); // ⚠️ Subscribes right-away, request is already sent
-
-  toggle() {
-    this.show.update((v) => !v);
-  }
+    { initialValue: null },
+  );
 }
 ```
 
 ```html
-<button (click)="toggle()">Toggle</button>
-@if (show()) {
-  <ul>
-    @for (post of posts(); track post.id) {
-      <li>{{ post.title }}</li>
-    }
-  </ul>
+@let entry = todo();
+@if (!entry) {
+  <p>Loading...</p>
+} @else {
+  <h1>{{ entry.title }}</h1>
 }
 ```
 
@@ -424,9 +420,10 @@ https://ngxtension.netlify.app/utilities/signals/to-lazy-signal/
 ---
 transition: slide-up
 level: 2
+layout: quote
 ---
 
-...
+# Are we doing he right thing?
 
 ---
 transition: slide-up
@@ -436,7 +433,10 @@ layout: section
 
 # Angular v19 resource API<sup>*</sup>
 
-<sup>*</sup>Experimental (see also [Angular Resource RFC 2: APIs](https://github.com/angular/angular/discussions/60121))
+<sup>*</sup>Experimental
+
+[Angular Resource RFC 1: Architecture](https://github.com/angular/angular/discussions/60120) \
+[Angular Resource RFC 2: APIs](https://github.com/angular/angular/discussions/60121))
 
 ---
 transition: slide-up
@@ -593,6 +593,30 @@ transition: slide-up
 level: 2
 ---
 
+# Example: httpResource with Zod
+
+```ts
+const Todo = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  completed: zod.boolean(),
+  userId: zod.number(),
+});
+```
+
+```ts
+id = signal(1);
+todo = httpResource(
+  () => `https://jsonplaceholder.typicode.com/todos/${this.id()}`,
+  {parse: Todo.parse}
+);
+```
+
+---
+transition: slide-up
+level: 2
+---
+
 # But, resources are not lazy!
 
 <style>
@@ -601,7 +625,7 @@ level: 2
   }
 </style>
 
-So let's create a `lazyResource` that loads when `value` is first read:
+`lazyResource` POC that loads when `value` is first read:
 
 <div class="font-size-1 overflow-y-auto">
 
@@ -666,7 +690,8 @@ function lazyResource<T, R>(
 
 </div>
 
-https://stackblitz.com/edit/stackblitz-starters-enhbj8gu?file=src%2Fmain.ts
+https://stackblitz.com/edit/stackblitz-starters-enhbj8gu?file=src%2Fmain.ts \
+https://gist.github.com/hupf/55451101dcc9451b39e60d43c724b258
 
 ---
 transition: slide-up
@@ -679,6 +704,54 @@ layout: section
 ---
 transition: slide-up
 level: 2
+layout: quote
 ---
 
-...
+# (...) In particular, we want to discourage architectures that use rendering to drive data fetching (that is, wait until data is requested from the UI before fetching it). In our experience, such architectures offer poor UX behavior, such empty content while loading and the potential for waterfalling loads.<br>Our intention is to encourage architectures which lift data fetching higher up in the application stack, ideally at the level of routes or route pages.
+
+— Alex Rickabaugh (Angular Core Team Member)
+
+<small>[Source](https://github.com/angular/angular/issues/58422#issuecomment-2452307269)</small>
+
+---
+transition: slide-up
+level: 2
+---
+
+> Today, often Angular components are "in charge" of data fetching operations. Requests are frequently made as late as possible, only initiated when the UI (via the async pipe) requests data via a subscription to an Observable or other source. \
+> (...) \
+> With resources, we intend to explore architectural **solutions where data fetching can be lifted outside of components** and managed by the framework itself, whether at the level of routes or through some other mechanism. We see this as having some attractive benefits:
+> - A higher-level mechanism can understand data needs from an entire component tree and fetch all the data at once / in parallel, avoiding waterfalls.
+> - Reasoning about the state in an application becomes easier when UI components do not concern themselves with data fetching and focus on data derivation instead.
+> - Testing gets easier as UI component tests can focus on the display logic.
+
+<small>Source: [Angular Resource RFC 1: Architecture](https://github.com/angular/angular/discussions/60120)</small>
+
+---
+transition: slide-left
+level: 2
+---
+
+# 🤔 ...okay, what does that mean?
+
+- Resources are a great bridge between the async & sync worlds
+- Avoid "waterfalls", fetch data "higher up" \
+  → (container vs. presentational components)
+- No all data fetching should be moved outside of the component
+- Resource-based data fetching will probably be integrated in the router and `@defer`
+
+---
+transition: slide-up
+level: 1
+---
+
+# Thanks. Questions?
+
+These slides are licensed under the terms of the [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) license.
+
+Slides: \
+[hupf.github.io/techkafi-nonlazy-angular-signals](https://hupf.github.io/techkafi-nonlazy-angular-signals/) ([Source](https://github.com/hupf/techkafi-nonlazy-angular-signals))
+
+[Examples](https://github.com/hupf/techkafi-nonlazy-angular-signals/tree/main/examples/data-fetching/src/components)
+
+<PoweredBySlidev mt-10 />
