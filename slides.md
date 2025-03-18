@@ -309,31 +309,38 @@ layout: section
 ---
 transition: slide-up
 level: 2
+layout: quote
 ---
 
-# Fetching data with observables
+# (...) However, not all state in applications is synchronous. Data must be fetched from backends, loaded from async APIs in the browser, or polled from user input that doesn't happen instantaneously.
+
+<small>Source: [Angular Resource RFC 1: Architecture](https://github.com/angular/angular/discussions/60120)</small>
+
+---
+transition: slide-up
+level: 2
+---
+
+# Data fetching with observables
 
 ```ts
-const http = inject(HttpClient);
-function getArticles(): Observable<ReadonlyArray<Article>> {
-  return http.get("/articles");
-}
-
-const articles$ = getArticles();
-// No request is sent yet...
-
-articles$.subscribe((articles) => console.log(articles)); // Triggers the request lazily
-```
-
-Or in template:
- 
-```html
-@if (show()) {
-  @for (article of articles$ | async; track article.id) {
-    {{ article.title }}
-  }
-} else {
-  <button (click)="show.set(true)">Show articles</button>
+@Component({
+  selector: 'app-root',
+  standalone: true,
+  imports: [AsyncPipe],
+  template: `
+    <ul>
+      @for (post of posts$ | async; track post.id) {
+        <li>{{ post.title }}</li>
+      }
+    </ul>
+  `,
+})
+export class App {
+  http = inject(HttpClient)
+  posts$ = this.http.get<ReadonlyArray<{ id: number; title: string }>>(
+    "https://jsonplaceholder.typicode.com/todos"
+  ); // ⚠️ Cold-observable (lazy), no request is sent yet
 }
 ```
 
@@ -342,7 +349,7 @@ transition: slide-up
 level: 2
 ---
 
-# Fetching data with signals?
+# Data fetching with signals?
 
 ```ts
 function getArticles(): Signal<ReadonlyArray<Article> | undefined> {
