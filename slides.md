@@ -301,6 +301,16 @@ layout: quote
 <small>Source: [Angular Resource RFC 1: Architecture](https://github.com/angular/angular/discussions/60120)</small>
 
 ---
+transition: slide-up
+level: 2
+layout: quote
+---
+
+# (...) However, not all state in applications is synchronous. Data must be fetched from backends, loaded from async APIs in the browser, or polled from user input that doesn't happen instantaneously.
+
+<small>Source: [Angular Resource RFC 1: Architecture](https://github.com/angular/angular/discussions/60120)</small>
+
+---
 transition: slide-left
 level: 2
 layout: quote
@@ -317,16 +327,6 @@ layout: section
 ---
 
 # On data fetching and lazyness
-
----
-transition: slide-up
-level: 2
-layout: quote
----
-
-# (...) However, not all state in applications is synchronous. Data must be fetched from backends, loaded from async APIs in the browser, or polled from user input that doesn't happen instantaneously.
-
-<small>Source: [Angular Resource RFC 1: Architecture](https://github.com/angular/angular/discussions/60120)</small>
 
 ---
 transition: slide-up
@@ -358,6 +358,42 @@ export class ObservableComponent {
 }
 ```
 
+---
+transition: fade
+level: 2
+---
+
+# Data fetching with signals?
+
+```ts
+export class ToSignalComponent {
+  http = inject(HttpClient);
+  id = input.required<number>();
+  todo: Signal<{ id: number; title: string }> = // ?
+}
+```
+
+---
+transition: fade
+level: 2
+---
+
+# Data fetching with signals?
+
+```ts
+export class ToSignalComponent {
+  http = inject(HttpClient);
+  id = input.required<number>();
+  todo = computed(() =>
+    // 🛑 Apparently, there is no "async computed" that
+    // can flatten a promise or an observable...
+    this.http.get<{ id: number; title: string }>(
+      `https://jsonplaceholder.typicode.com/todos/${this.id()}`,
+    )
+  );
+}
+```
+
 
 ---
 transition: slide-up
@@ -369,7 +405,7 @@ level: 2
 ```ts
 export class ToSignalComponent {
   http = inject(HttpClient);
-  id = signal(1);
+  id = input.required<number>();
   todo = toSignal(
     toObservable(this.id).pipe(
       switchMap((id) =>
@@ -397,25 +433,89 @@ Interop: https://angular.dev/ecosystem/rxjs-interop
 -->
 
 ---
+transition: fade
+level: 2
+---
+
+# But what about lazyness?
+
+With observables:
+
+```ts
+export class ObservableLazyComponent {
+  http = inject(HttpClient);
+  show = signal(false);
+  todos$ = this.http.get<ReadonlyArray<{ id: number; title: string }>>(
+    'https://jsonplaceholder.typicode.com/todos',
+  );
+  toggle() {
+    this.show.update((v) => !v);
+  }
+}
+```
+
+```html
+<button (click)="toggle()">Toggle</button>
+@if (show()) {
+  <ul>
+    @for (todo of todos$ | async; track todo.id) {
+      <li>{{ todo.title }}</li>
+    }
+  </ul>
+}
+```
+
+---
+transition: slide-up
+level: 2
+---
+
+# But what about lazyness?
+
+With signals:
+
+```ts
+export class ToSignalLazyComponent {
+  http = inject(HttpClient);
+  show = signal(false);
+  todos = toSignal(
+    this.http.get<ReadonlyArray<{ id: number; title: string }>>(
+      'https://jsonplaceholder.typicode.com/todos',
+    ),
+    { initialValue: [] },
+  );
+  toggle() {
+    this.show.update((v) => !v);
+  }
+}
+```
+
+```html
+<button (click)="toggle()">Toggle</button>
+@if (show()) {
+  <ul>
+    @for (todo of todos(); track todo.id) {
+      <li>{{ todo.title }}</li>
+    }
+  </ul>
+}
+```
+
+---
 transition: slide-up
 level: 2
 layout: bullets
 ---
 
+# Lazyness observations
+
 - `toSignal` immediately subscribes to observable, making it "hot"
 - `toSignal` creates a subscription that is alive as long as the component/service is alive.
+- `toLazySignal` (unofficial):
 
----
-transition: slide-up
-level: 2
----
-
-# toLazySignal
-
-> This function works almost like the original toSignal() from Angular core (and uses it), but the subscription will be created not instantly - only when the resulting signal is read for the first time.
+> This function works almost like the original `toSignal()` from Angular core (and uses it), but the subscription will be created not instantly - only when the resulting signal is read for the first time.
 
 https://ngxtension.netlify.app/utilities/signals/to-lazy-signal/
-
 
 ---
 transition: slide-up
@@ -423,7 +523,7 @@ level: 2
 layout: quote
 ---
 
-# Are we doing he right thing?
+# Are we on the right track?
 
 ---
 transition: slide-up
@@ -454,7 +554,7 @@ level: 2
 layout: quote
 ---
 
-# The Angular team sees resources and Observable as serving fundamentally different purposes and use cases. Observables work best when used to model _events over time_, while resource is concerned with asynchronously derived state.
+# The Angular team sees resources and Observables as serving fundamentally different purposes and use cases. Observables work best when used to model _events over time_, while resource is concerned with asynchronously derived state.
 
 <small>Source: [Angular Resource RFC 1: Architecture](https://github.com/angular/angular/discussions/60120)</small>
 
@@ -488,9 +588,10 @@ level: 2
 interface ResourceRef<T> {
   readonly value: Signal<T>;
   readonly status: Signal<ResourceStatus>;
-  readonly error: Signal<Error | undefined>;
+  readonly error: Signal<unknown>;
   readonly isLoading: Signal<boolean>;
   hasValue(): boolean;
+  reload(): boolean;
 }
 
 enum ResourceStatus {
@@ -506,7 +607,7 @@ enum ResourceStatus {
 https://angular.dev/api/core/ResourceRef
 
 ---
-transition: slide-up
+transition: fade
 level: 2
 ---
 
@@ -621,7 +722,7 @@ level: 2
 
 <style>
   div {
-    max-height: 30vh;
+    max-height: 25vh;
   }
 </style>
 
@@ -704,12 +805,12 @@ layout: section
 ---
 transition: slide-up
 level: 2
-layout: quote
 ---
 
-# (...) In particular, we want to discourage architectures that use rendering to drive data fetching (that is, wait until data is requested from the UI before fetching it). In our experience, such architectures offer poor UX behavior, such empty content while loading and the potential for waterfalling loads.<br>Our intention is to encourage architectures which lift data fetching higher up in the application stack, ideally at the level of routes or route pages.
+# UI-driven data fetching
 
-— Alex Rickabaugh (Angular Core Team Member)
+> (...) In particular, we want to discourage architectures that use rendering to drive data fetching (that is, wait until data is requested from the UI before fetching it). In our experience, such architectures offer poor UX behavior, such as empty content while loading and the potential for waterfalling loads.<br>Our intention is to encourage architectures which lift data fetching higher up in the application stack, ideally at the level of routes or route pages. \
+> — Alex Rickabaugh (Angular Core Team Member)
 
 <small>[Source](https://github.com/angular/angular/issues/58422#issuecomment-2452307269)</small>
 
@@ -717,6 +818,8 @@ layout: quote
 transition: slide-up
 level: 2
 ---
+
+# Lift data fetching higher up
 
 > Today, often Angular components are "in charge" of data fetching operations. Requests are frequently made as late as possible, only initiated when the UI (via the async pipe) requests data via a subscription to an Observable or other source. \
 > (...) \
@@ -734,12 +837,12 @@ level: 2
 
 # 🤔 ...okay, what does that mean?
 
-- Resources are a great bridge between the async & sync worlds
+- Resources are a great signal-based bridge between the async & sync worlds
 - Avoid "waterfalls", fetch data "higher up" \
   → Container vs. presentational components \
   → Pure core, imperative shell
 - Not all data fetching should be moved outside of the component
-- Resource-based data fetching will probably be integrated in the router and `@defer`
+- Resource-based data fetching is the future will probably be integrated in the router and `@defer` etc.
 
 ---
 transition: slide-up
